@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ollama Windows Setup Guide - Local LLM Configuration</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.7; color: #333; max-width: 950px; margin: 40px auto; padding: 20px; background-color: #1a1a2e; }
+        .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+        h1 { color: #2c3e50; border-bottom: 3px solid #e74c3c; padding-bottom: 15px; }
+        h2 { color: #c0392b; margin-top: 40px; }
+        h3 { color: #34495e; margin-top: 25px; }
+        .intro-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 8px; margin: 20px 0; }
+        .intro-box h3 { color: white; margin-top: 0; }
+        .step-box { background: #f8f9fa; border-left: 5px solid #3498db; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+        .step-num { background: #3498db; color: white; width: 35px; height: 35px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 10px; }
+        .command-box { background: #263238; color: #aed581; padding: 15px 20px; border-radius: 6px; font-family: 'Consolas', 'Courier New', monospace; margin: 15px 0; overflow-x: auto; position: relative; }
+        .command-box::before { content: 'PowerShell'; position: absolute; top: -10px; right: 10px; background: #607d8b; color: white; padding: 2px 10px; border-radius: 4px; font-size: 0.75em; }
+        .command-box.cmd::before { content: 'CMD'; background: #795548; }
+        .command-box.bash::before { content: 'Bash'; background: #4caf50; }
+        .warning { background: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 0 6px 6px 0; }
+        .warning strong { color: #856404; }
+        .success { background: #d4edda; border-left: 5px solid #28a745; padding: 15px; margin: 15px 0; border-radius: 0 6px 6px 0; }
+        .success strong { color: #155724; }
+        .info { background: #e3f2fd; border-left: 5px solid #2196f3; padding: 15px; margin: 15px 0; border-radius: 0 6px 6px 0; }
+        .info strong { color: #0d47a1; }
+        code { background: #ecf0f1; padding: 2px 8px; border-radius: 4px; font-family: 'Consolas', monospace; color: #c0392b; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: 600; }
+        .gpu-card { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 20px; border-radius: 8px; margin: 10px 0; }
+        .config-table td:first-child { font-family: 'Consolas', monospace; background: #f5f5f5; }
+        .diagram { background: #fafafa; border: 2px dashed #ccc; padding: 20px; margin: 20px 0; border-radius: 8px; font-family: 'Consolas', monospace; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦙 Ollama Windows Setup Guide</h1>
+        <p><em>Local LLM Configuration for the Surveillance Design Assistant</em></p>
+
+        <div class="intro-box">
+            <h3>What is Ollama?</h3>
+            <p>Ollama is a lightweight framework for running Large Language Models (LLMs) locally on your machine. It handles model downloading, GPU acceleration, and provides a simple API for inference. Think of it as "Docker for LLMs" - it packages everything needed to run models like Llama, Mistral, and Phi locally.</p>
+            <p><strong>Why local?</strong> Privacy (your PDFs never leave your machine), no API costs, and works offline.</p>
+        </div>
+
+        <h2>Prerequisites</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Minimum</th>
+                <th>Recommended</th>
+            </tr>
+            <tr>
+                <td>Operating System</td>
+                <td>Windows 10 (64-bit)</td>
+                <td>Windows 11</td>
+            </tr>
+            <tr>
+                <td>RAM</td>
+                <td>8 GB</td>
+                <td>16+ GB</td>
+            </tr>
+            <tr>
+                <td>GPU VRAM</td>
+                <td>4 GB (for small models)</td>
+                <td>8+ GB NVIDIA</td>
+            </tr>
+            <tr>
+                <td>Disk Space</td>
+                <td>10 GB</td>
+                <td>50+ GB (for multiple models)</td>
+            </tr>
+        </table>
+
+        <div class="info">
+            <strong>💡 No GPU?</strong> Ollama works on CPU-only systems, but inference will be slower. For CPU-only setups, use smaller models like <code>phi3:mini</code> or <code>llama3.2:1b</code>.
+        </div>
+
+        <h2>Step 1: Download & Install Ollama</h2>
+
+        <div class="step-box">
+            <p><span class="step-num">1</span><strong>Download the Installer</strong></p>
+            <p>Visit <a href="https://ollama.com/download/windows" target="_blank">ollama.com/download/windows</a> and download <code>OllamaSetup.exe</code></p>
+        </div>
+
+        <div class="step-box">
+            <p><span class="step-num">2</span><strong>Run the Installer</strong></p>
+            <p>Double-click the downloaded file. The installer will:</p>
+            <ul>
+                <li>Install Ollama to <code>C:\Users\&lt;you&gt;\AppData\Local\Programs\Ollama</code></li>
+                <li>Add <code>ollama</code> to your system PATH</li>
+                <li>Start the Ollama background service automatically</li>
+            </ul>
+        </div>
+
+        <div class="step-box">
+            <p><span class="step-num">3</span><strong>Verify Installation</strong></p>
+            <p>Open a new PowerShell or CMD window and run:</p>
+            <div class="command-box">ollama --version</div>
+            <p>You should see something like: <code>ollama version 0.3.x</code></p>
+        </div>
+
+        <div class="success">
+            <strong>✓ Success Indicator:</strong> You'll see a llama icon in your system tray (bottom-right). This means Ollama is running and ready.
+        </div>
+
+        <h2>Step 2: Download Required Models</h2>
+
+        <p>For this project, we need two types of models:</p>
+        <ol>
+            <li><strong>Embedding Model</strong> - Converts text to vectors for semantic search</li>
+            <li><strong>Chat/Completion Model</strong> - Generates responses from context</li>
+        </ol>
+
+        <h3>Download the Embedding Model</h3>
+        <div class="command-box">ollama pull nomic-embed-text</div>
+
+        <div class="info">
+            <strong>About nomic-embed-text:</strong>
+            <ul>
+                <li>768-dimensional embeddings (good balance of quality vs. speed)</li>
+                <li>~275 MB download</li>
+                <li>Optimized for retrieval tasks</li>
+                <li>Runs efficiently on CPU</li>
+            </ul>
+        </div>
+
+        <h3>Download the Chat Model</h3>
+        <p>Choose based on your hardware:</p>
+
+        <table>
+            <tr>
+                <th>Model</th>
+                <th>VRAM Needed</th>
+                <th>Command</th>
+                <th>Best For</th>
+            </tr>
+            <tr>
+                <td><code>phi3:mini</code></td>
+                <td>~3 GB</td>
+                <td><code>ollama pull phi3:mini</code></td>
+                <td>Low VRAM / CPU-only</td>
+            </tr>
+            <tr>
+                <td><code>llama3.2:3b</code></td>
+                <td>~4 GB</td>
+                <td><code>ollama pull llama3.2:3b</code></td>
+                <td>Budget GPU (GTX 1660)</td>
+            </tr>
+            <tr>
+                <td><code>llama3.1:8b</code></td>
+                <td>~6 GB</td>
+                <td><code>ollama pull llama3.1:8b</code></td>
+                <td>Mid-range GPU (RTX 3060)</td>
+            </tr>
+            <tr>
+                <td><code>llama3.1:8b-instruct-q8_0</code></td>
+                <td>~10 GB</td>
+                <td><code>ollama pull llama3.1:8b-instruct-q8_0</code></td>
+                <td>Higher quality (RTX 3080+)</td>
+            </tr>
+        </table>
+
+        <div class="warning">
+            <strong>⚠️ First Download:</strong> Models can be 2-8 GB. The first <code>ollama pull</code> will take time depending on your internet speed. Subsequent runs use cached models.
+        </div>
+
+        <p><strong>Recommended for this project:</strong></p>
+        <div class="command-box">ollama pull llama3.1:8b</div>
+
+        <h2>Step 3: Test the Models</h2>
+
+        <h3>Test the Chat Model</h3>
+        <div class="command-box">ollama run llama3.1:8b "What is the typical PoE power consumption of a 4K PTZ camera?"</div>
+
+        <p>You should get a coherent response about camera power consumption (even without our PDFs - this tests the base model).</p>
+
+        <h3>Test the Embedding Model</h3>
+        <div class="command-box">ollama run nomic-embed-text "test embedding"</div>
+
+        <p>This will output a long array of numbers (the embedding vector). If you see numbers, it's working!</p>
+
+        <h3>Interactive Chat Mode</h3>
+        <div class="command-box">ollama run llama3.1:8b</div>
+        <p>This opens an interactive chat. Type <code>/bye</code> to exit.</p>
+
+        <h2>Step 4: Understanding the Ollama API</h2>
+
+        <p>Ollama runs a local REST API on <code>http://localhost:11434</code>. Our Python code will communicate with this API.</p>
+
+        <div class="diagram">
+            ┌─────────────────┐     HTTP POST      ┌─────────────────┐
+            │  Python App     │ ──────────────────▶│  Ollama API     │
+            │  (our code)     │                    │  localhost:11434│
+            └─────────────────┘     JSON Response  └─────────────────┘
+                                  ◀──────────────────
+        </div>
+
+        <h3>Key API Endpoints</h3>
+        <table class="config-table">
+            <tr>
+                <th>Endpoint</th>
+                <th>Purpose</th>
+                <th>Method</th>
+            </tr>
+            <tr>
+                <td>/api/generate</td>
+                <td>Text completion</td>
+                <td>POST</td>
+            </tr>
+            <tr>
+                <td>/api/chat</td>
+                <td>Chat with message history</td>
+                <td>POST</td>
+            </tr>
+            <tr>
+                <td>/api/embeddings</td>
+                <td>Generate embeddings</td>
+                <td>POST</td>
+            </tr>
+            <tr>
+                <td>/api/tags</td>
+                <td>List installed models</td>
+                <td>GET</td>
+            </tr>
+        </table>
+
+        <h3>Test the API Manually</h3>
+        <div class="command-box">curl http://localhost:11434/api/tags</div>
+        <p>This returns JSON listing all your downloaded models.</p>
+
+        <h2>Step 5: Environment Variables (Optional)</h2>
+
+        <p>You can customize Ollama's behavior with environment variables:</p>
+
+        <table class="config-table">
+            <tr>
+                <th>Variable</th>
+                <th>Default</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>OLLAMA_HOST</td>
+                <td>127.0.0.1:11434</td>
+                <td>API bind address</td>
+            </tr>
+            <tr>
+                <td>OLLAMA_MODELS</td>
+                <td>~/.ollama/models</td>
+                <td>Model storage location</td>
+            </tr>
+            <tr>
+                <td>OLLAMA_NUM_PARALLEL</td>
+                <td>1</td>
+                <td>Concurrent request handling</td>
+            </tr>
+            <tr>
+                <td>OLLAMA_MAX_LOADED_MODELS</td>
+                <td>1</td>
+                <td>Models kept in VRAM</td>
+            </tr>
+        </table>
+
+        <p>To set permanently on Windows:</p>
+        <div class="command-box">[System.Environment]::SetEnvironmentVariable('OLLAMA_HOST', '0.0.0.0:11434', 'User')</div>
+
+        <div class="warning">
+            <strong>⚠️ Security Note:</strong> Setting <code>OLLAMA_HOST</code> to <code>0.0.0.0</code> exposes Ollama to your network. Only do this if you need remote access and understand the security implications.
+        </div>
+
+        <h2>Step 6: Python Integration</h2>
+
+        <p>Install the official Ollama Python library:</p>
+        <div class="command-box">pip install ollama</div>
+
+        <h3>Basic Usage Example</h3>
+        <div class="command-box bash" style="white-space: pre; text-align: left;">
+import ollama
+
+# Chat completion
+response = ollama.chat(
+    model='llama3.1:8b',
+    messages=[{
+        'role': 'user',
+        'content': 'What is PoE+ power budget?'
+    }]
+)
+print(response['message']['content'])
+
+# Generate embeddings
+embedding = ollama.embeddings(
+    model='nomic-embed-text',
+    prompt='XNV-8080R specifications'
+)
+print(f"Vector dimensions: {len(embedding['embedding'])}")</div>
+
+        <h3>LangChain Integration</h3>
+        <div class="command-box bash" style="white-space: pre; text-align: left;">
+from langchain_community.llms import Ollama
+from langchain_community.embeddings import OllamaEmbeddings
+
+# For chat/completion
+llm = Ollama(model="llama3.1:8b", temperature=0.2)
+
+# For embeddings
+embeddings = OllamaEmbeddings(model="nomic-embed-text")</div>
+
+        <h2>Troubleshooting</h2>
+
+        <h3>Ollama Not Starting</h3>
+        <div class="step-box">
+            <p>Check if the service is running:</p>
+            <div class="command-box">Get-Process ollama -ErrorAction SilentlyContinue</div>
+            <p>If not running, start it manually:</p>
+            <div class="command-box">ollama serve</div>
+        </div>
+
+        <h3>Out of Memory Errors</h3>
+        <div class="step-box">
+            <p>Switch to a smaller model:</p>
+            <div class="command-box">ollama run phi3:mini</div>
+            <p>Or use a more quantized version (smaller but lower quality):</p>
+            <div class="command-box">ollama pull llama3.1:8b-instruct-q4_0</div>
+        </div>
+
+        <h3>Slow Performance</h3>
+        <div class="step-box">
+            <p>Check if GPU is being used:</p>
+            <div class="command-box">ollama ps</div>
+            <p>If "Processor" shows CPU instead of GPU, ensure you have:</p>
+            <ul>
+                <li>NVIDIA GPU with CUDA support</li>
+                <li>Latest NVIDIA drivers installed</li>
+                <li>Sufficient VRAM for the model</li>
+            </ul>
+        </div>
+
+        <h3>Connection Refused</h3>
+        <div class="step-box">
+            <p>Verify Ollama is listening:</p>
+            <div class="command-box">netstat -an | findstr 11434</div>
+            <p>You should see <code>LISTENING</code> on port 11434.</p>
+        </div>
+
+        <h2>Model Management Commands</h2>
+        <table class="config-table">
+            <tr>
+                <th>Command</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>ollama list</td>
+                <td>Show downloaded models</td>
+            </tr>
+            <tr>
+                <td>ollama show llama3.1:8b</td>
+                <td>Display model details</td>
+            </tr>
+            <tr>
+                <td>ollama rm phi3:mini</td>
+                <td>Delete a model</td>
+            </tr>
+            <tr>
+                <td>ollama cp llama3.1:8b my-model</td>
+                <td>Copy/rename a model</td>
+            </tr>
+            <tr>
+                <td>ollama ps</td>
+                <td>Show running models</td>
+            </tr>
+        </table>
+
+        <div class="success">
+            <strong>✓ Ready for Sprint 1!</strong> You now have Ollama configured with the embedding model (<code>nomic-embed-text</code>) and chat model (<code>llama3.1:8b</code>) needed for the RAG pipeline.
+        </div>
+
+    </div>
+</body>
+</html>

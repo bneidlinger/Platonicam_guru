@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Surveillance System Design AI - Blueprint</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 40px auto; padding: 20px; background-color: #f4f7f6; }
+        .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #2980b9; margin-top: 30px; }
+        .arch-box { background: #eef2f3; border-left: 5px solid #3498db; padding: 15px; margin: 20px 0; font-family: monospace; }
+        .spec-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .spec-table th, .spec-table td { text-align: left; padding: 12px; border-bottom: 1px solid #ddd; }
+        .spec-table th { background-color: #f8f9fa; }
+        .tag { background: #3498db; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Project: Enterprise Surveillance Design Assistant</h1>
+        <p><strong>Goal:</strong> A local-first RAG (Retrieval-Augmented Generation) system to parse vendor PDFs (Hanwha, Axis, Bosch) and provide design-level intelligence for Physical Security Systems Engineering.</p>
+
+        <h2>Architecture Overview</h2>
+        <div class="arch-box">
+            [PDF Library] -> [PyMuPDF Parser] -> [Recursive Character Splitting] <br>
+            -> [Ollama Embedding (Nomic-Text)] -> [ChromaDB Vector Store] <br>
+            -> [User Query] -> [Llama 4.1 Scout Context Retrieval] -> [Web UI Response]
+        </div>
+
+        <h2>Core Tech Stack</h2>
+        <table class="spec-table">
+            <tr><th>Component</th><th>Technology</th><th>Role</th></tr>
+            <tr><td>Backend</td><td>Python 3.11+</td><td>Logic & Parsing</td></tr>
+            <tr><td>LLM Engine</td><td>Ollama (Local)</td><td>Inference (Llama 4.1 / Phi-4)</td></tr>
+            <tr><td>Vector DB</td><td>ChromaDB</td><td>Long-term technical memory</td></tr>
+            <tr><td>UI</td><td>Streamlit</td><td>Project & Search Dashboard</td></tr>
+        </table>
+
+        <h2>Key Capabilities</h2>
+        <ul>
+            <li><strong>Automated POE Budgeting:</strong> Scrape "Max Power Consumption" from tables and sum per project.</li>
+            <li><strong>Accessory Logic:</strong> Identify matching mounts/pendants by cross-referencing model numbers in text.</li>
+            <li><strong>Config Retrieval:</strong> Instant access to default IPs, credentials, and RTSP string formats.</li>
+        </ul>
+    </div>
+</body>
+</html>

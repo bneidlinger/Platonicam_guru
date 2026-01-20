@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ChromaDB Setup Guide - Vector Database Configuration</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.7; color: #333; max-width: 950px; margin: 40px auto; padding: 20px; background-color: #0f0f23; }
+        .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+        h1 { color: #2c3e50; border-bottom: 3px solid #9b59b6; padding-bottom: 15px; }
+        h2 { color: #8e44ad; margin-top: 40px; }
+        h3 { color: #34495e; margin-top: 25px; }
+        .intro-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 8px; margin: 20px 0; }
+        .intro-box h3 { color: white; margin-top: 0; }
+        .concept-box { background: #f5f0ff; border: 2px solid #9b59b6; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .step-box { background: #f8f9fa; border-left: 5px solid #9b59b6; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+        .step-num { background: #9b59b6; color: white; width: 35px; height: 35px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 10px; }
+        .command-box { background: #263238; color: #ce93d8; padding: 15px 20px; border-radius: 6px; font-family: 'Consolas', 'Courier New', monospace; margin: 15px 0; overflow-x: auto; position: relative; }
+        .command-box::before { content: 'PowerShell'; position: absolute; top: -10px; right: 10px; background: #607d8b; color: white; padding: 2px 10px; border-radius: 4px; font-size: 0.75em; }
+        .command-box.python::before { content: 'Python'; background: #3776ab; }
+        .warning { background: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 0 6px 6px 0; }
+        .warning strong { color: #856404; }
+        .success { background: #d4edda; border-left: 5px solid #28a745; padding: 15px; margin: 15px 0; border-radius: 0 6px 6px 0; }
+        .success strong { color: #155724; }
+        .info { background: #e8daef; border-left: 5px solid #9b59b6; padding: 15px; margin: 15px 0; border-radius: 0 6px 6px 0; }
+        .info strong { color: #6c3483; }
+        code { background: #ecf0f1; padding: 2px 8px; border-radius: 4px; font-family: 'Consolas', monospace; color: #8e44ad; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: 600; }
+        .diagram { background: #1e1e2e; color: #cdd6f4; padding: 25px; border-radius: 8px; font-family: 'Consolas', monospace; margin: 20px 0; white-space: pre; overflow-x: auto; line-height: 1.4; }
+        .config-table td:first-child { font-family: 'Consolas', monospace; background: #f5f5f5; }
+        .code-block { background: #2d2d2d; color: #f8f8f2; padding: 20px; border-radius: 8px; font-family: 'Consolas', monospace; margin: 15px 0; overflow-x: auto; white-space: pre; line-height: 1.5; }
+        .code-comment { color: #6272a4; }
+        .code-string { color: #f1fa8c; }
+        .code-keyword { color: #ff79c6; }
+        .code-function { color: #50fa7b; }
+        .code-number { color: #bd93f9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗄️ ChromaDB Setup Guide</h1>
+        <p><em>Vector Database Configuration for Semantic Search</em></p>
+
+        <div class="intro-box">
+            <h3>What is ChromaDB?</h3>
+            <p>ChromaDB is an open-source embedding database designed for AI applications. It stores your document chunks as high-dimensional vectors, enabling semantic search - finding content by meaning rather than exact keyword matches.</p>
+            <p><strong>Why ChromaDB?</strong> It's lightweight, runs locally (no cloud dependencies), integrates easily with LangChain, and handles both storage and similarity search in one package.</p>
+        </div>
+
+        <h2>Understanding Vector Embeddings</h2>
+
+        <div class="concept-box">
+            <h3>The Core Concept</h3>
+            <p>When you search "camera power consumption", a traditional database looks for those exact words. A vector database understands that "PoE wattage requirements" means the same thing.</p>
+            <p><strong>How it works:</strong></p>
+            <ol>
+                <li>Text chunks are converted to vectors (arrays of numbers) by an embedding model</li>
+                <li>Similar meanings = similar vectors (close together in mathematical space)</li>
+                <li>Queries are also converted to vectors</li>
+                <li>ChromaDB finds stored vectors closest to the query vector</li>
+            </ol>
+        </div>
+
+        <div class="diagram">
+    Document Text                     Vector Space (simplified 2D view)
+    ─────────────                     ────────────────────────────────
+
+    "Max power: 25.5W PoE++"     →      • power specs
+                                           • PoE requirements
+    "PoE Class 4 device"         →        • wattage info
+
+    "Mounting bracket XM-100"    →                    • mount accessories
+                                                        • bracket options
+    "Compatible pendant mount"   →                      •
+
+    ──────────────────────────────────────────────────────────────────
+    Query: "How much power does this camera use?"
+
+    Converted to vector → finds nearest neighbors → returns power specs</div>
+
+        <h2>Installation</h2>
+
+        <div class="step-box">
+            <p><span class="step-num">1</span><strong>Install ChromaDB</strong></p>
+            <div class="command-box">pip install chromadb</div>
+            <p>This installs ChromaDB with its default SQLite backend - perfect for local development.</p>
+        </div>
+
+        <div class="step-box">
+            <p><span class="step-num">2</span><strong>Verify Installation</strong></p>
+            <div class="command-box python">python -c "import chromadb; print(chromadb.__version__)"</div>
+            <p>Should output version 0.5.x or higher.</p>
+        </div>
+
+        <div class="info">
+            <strong>💡 Dependencies:</strong> ChromaDB automatically installs <code>numpy</code>, <code>onnxruntime</code>, and other required packages.
+        </div>
+
+        <h2>ChromaDB Basics</h2>
+
+        <h3>Storage Modes</h3>
+        <table>
+            <tr>
+                <th>Mode</th>
+                <th>Use Case</th>
+                <th>Data Persistence</th>
+            </tr>
+            <tr>
+                <td><code>EphemeralClient()</code></td>
+                <td>Testing, experiments</td>
+                <td>In-memory only (lost on restart)</td>
+            </tr>
+            <tr>
+                <td><code>PersistentClient(path="./chroma_db")</code></td>
+                <td>Production, this project</td>
+                <td>Saved to disk</td>
+            </tr>
+            <tr>
+                <td><code>HttpClient(host, port)</code></td>
+                <td>Client-server setup</td>
+                <td>Remote server</td>
+            </tr>
+        </table>
+
+        <h3>Creating a Persistent Database</h3>
+        <div class="code-block"><span class="code-keyword">import</span> chromadb
+
+<span class="code-comment"># Create/connect to a persistent database</span>
+client = chromadb.<span class="code-function">PersistentClient</span>(path=<span class="code-string">"./chroma_db"</span>)
+
+<span class="code-comment"># Create a collection (like a table in SQL)</span>
+collection = client.<span class="code-function">get_or_create_collection</span>(
+    name=<span class="code-string">"camera_docs"</span>,
+    metadata={<span class="code-string">"description"</span>: <span class="code-string">"Surveillance camera documentation"</span>}
+)</div>
+
+        <h2>Collection Schema Design</h2>
+
+        <p>For the Surveillance Design Assistant, we'll store:</p>
+
+        <div class="concept-box">
+            <h3>Our Collection Structure</h3>
+            <table class="config-table">
+                <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td>id</td>
+                    <td>string</td>
+                    <td>Unique identifier (e.g., "hanwha_xnv8080r_chunk_42")</td>
+                </tr>
+                <tr>
+                    <td>embedding</td>
+                    <td>float[]</td>
+                    <td>768-dim vector from nomic-embed-text</td>
+                </tr>
+                <tr>
+                    <td>document</td>
+                    <td>string</td>
+                    <td>The actual text chunk</td>
+                </tr>
+                <tr>
+                    <td>metadata.source_file</td>
+                    <td>string</td>
+                    <td>Original PDF filename</td>
+                </tr>
+                <tr>
+                    <td>metadata.vendor</td>
+                    <td>string</td>
+                    <td>"hanwha", "axis", or "bosch"</td>
+                </tr>
+                <tr>
+                    <td>metadata.page_num</td>
+                    <td>int</td>
+                    <td>Page number in source PDF</td>
+                </tr>
+                <tr>
+                    <td>metadata.chunk_index</td>
+                    <td>int</td>
+                    <td>Chunk position within document</td>
+                </tr>
+            </table>
+        </div>
+
+        <h2>Adding Documents</h2>
+
+        <div class="code-block"><span class="code-keyword">import</span> chromadb
+<span class="code-keyword">import</span> ollama
+
+client = chromadb.<span class="code-function">PersistentClient</span>(path=<span class="code-string">"./chroma_db"</span>)
+collection = client.<span class="code-function">get_or_create_collection</span>(name=<span class="code-string">"camera_docs"</span>)
+
+<span class="code-comment"># Example: Adding a chunk from a Hanwha datasheet</span>
+chunk_text = <span class="code-string">"""
+XNV-8080R Specifications
+Max Power Consumption: 25.5W (PoE++)
+Operating Temperature: -50°C to +55°C
+"""</span>
+
+<span class="code-comment"># Generate embedding using Ollama</span>
+embedding_response = ollama.<span class="code-function">embeddings</span>(
+    model=<span class="code-string">"nomic-embed-text"</span>,
+    prompt=chunk_text
+)
+embedding_vector = embedding_response[<span class="code-string">'embedding'</span>]
+
+<span class="code-comment"># Add to ChromaDB</span>
+collection.<span class="code-function">add</span>(
+    ids=[<span class="code-string">"hanwha_xnv8080r_chunk_1"</span>],
+    embeddings=[embedding_vector],
+    documents=[chunk_text],
+    metadatas=[{
+        <span class="code-string">"source_file"</span>: <span class="code-string">"XNV-8080R_Datasheet.pdf"</span>,
+        <span class="code-string">"vendor"</span>: <span class="code-string">"hanwha"</span>,
+        <span class="code-string">"page_num"</span>: <span class="code-number">2</span>,
+        <span class="code-string">"chunk_index"</span>: <span class="code-number">1</span>
+    }]
+)</div>
+
+        <h2>Querying the Database</h2>
+
+        <h3>Basic Similarity Search</h3>
+        <div class="code-block"><span class="code-comment"># Query by text (ChromaDB will embed the query)</span>
+<span class="code-comment"># Note: This uses ChromaDB's default embedder, not Ollama</span>
+
+<span class="code-comment"># For Ollama embeddings, embed the query first:</span>
+query_text = <span class="code-string">"What is the power consumption of the XNV-8080R?"</span>
+
+query_embedding = ollama.<span class="code-function">embeddings</span>(
+    model=<span class="code-string">"nomic-embed-text"</span>,
+    prompt=query_text
+)[<span class="code-string">'embedding'</span>]
+
+results = collection.<span class="code-function">query</span>(
+    query_embeddings=[query_embedding],
+    n_results=<span class="code-number">5</span>,  <span class="code-comment"># Return top 5 matches</span>
+    include=[<span class="code-string">"documents"</span>, <span class="code-string">"metadatas"</span>, <span class="code-string">"distances"</span>]
+)
+
+<span class="code-keyword">for</span> i, doc <span class="code-keyword">in</span> enumerate(results[<span class="code-string">'documents'</span>][<span class="code-number">0</span>]):
+    print(f<span class="code-string">"Result {i+1} (distance: {results['distances'][0][i]:.4f}):"</span>)
+    print(f<span class="code-string">"  Source: {results['metadatas'][0][i]['source_file']}"</span>)
+    print(f<span class="code-string">"  Content: {doc[:200]}..."</span>)
+    print()</div>
+
+        <h3>Filtered Queries (by Vendor)</h3>
+        <div class="code-block"><span class="code-comment"># Only search Hanwha documents</span>
+results = collection.<span class="code-function">query</span>(
+    query_embeddings=[query_embedding],
+    n_results=<span class="code-number">5</span>,
+    where={<span class="code-string">"vendor"</span>: <span class="code-string">"hanwha"</span>},  <span class="code-comment"># Metadata filter</span>
+    include=[<span class="code-string">"documents"</span>, <span class="code-string">"metadatas"</span>]
+)
+
+<span class="code-comment"># Complex filter: Hanwha OR Axis</span>
+results = collection.<span class="code-function">query</span>(
+    query_embeddings=[query_embedding],
+    n_results=<span class="code-number">5</span>,
+    where={
+        <span class="code-string">"$or"</span>: [
+            {<span class="code-string">"vendor"</span>: <span class="code-string">"hanwha"</span>},
+            {<span class="code-string">"vendor"</span>: <span class="code-string">"axis"</span>}
+        ]
+    }
+)</div>
+
+        <h2>LangChain Integration</h2>
+
+        <p>For the RAG pipeline, we'll use LangChain's ChromaDB wrapper:</p>
+
+        <div class="step-box">
+            <p><span class="step-num">1</span><strong>Install LangChain ChromaDB package</strong></p>
+            <div class="command-box">pip install langchain-chroma</div>
+        </div>
+
+        <div class="code-block"><span class="code-keyword">from</span> langchain_chroma <span class="code-keyword">import</span> Chroma
+<span class="code-keyword">from</span> langchain_community.embeddings <span class="code-keyword">import</span> OllamaEmbeddings
+
+<span class="code-comment"># Initialize Ollama embeddings</span>
+embeddings = <span class="code-function">OllamaEmbeddings</span>(model=<span class="code-string">"nomic-embed-text"</span>)
+
+<span class="code-comment"># Connect to ChromaDB via LangChain</span>
+vectorstore = <span class="code-function">Chroma</span>(
+    collection_name=<span class="code-string">"camera_docs"</span>,
+    embedding_function=embeddings,
+    persist_directory=<span class="code-string">"./chroma_db"</span>
+)
+
+<span class="code-comment"># Add documents (LangChain handles chunking + embedding)</span>
+<span class="code-keyword">from</span> langchain.schema <span class="code-keyword">import</span> Document
+
+docs = [
+    <span class="code-function">Document</span>(
+        page_content=<span class="code-string">"XNV-8080R Max Power: 25.5W"</span>,
+        metadata={<span class="code-string">"vendor"</span>: <span class="code-string">"hanwha"</span>, <span class="code-string">"source"</span>: <span class="code-string">"datasheet.pdf"</span>}
+    )
+]
+vectorstore.<span class="code-function">add_documents</span>(docs)
+
+<span class="code-comment"># Similarity search</span>
+results = vectorstore.<span class="code-function">similarity_search</span>(
+    <span class="code-string">"camera power requirements"</span>,
+    k=<span class="code-number">5</span>,
+    filter={<span class="code-string">"vendor"</span>: <span class="code-string">"hanwha"</span>}
+)</div>
+
+        <h2>Database Management</h2>
+
+        <h3>Useful Operations</h3>
+        <div class="code-block"><span class="code-comment"># List all collections</span>
+collections = client.<span class="code-function">list_collections</span>()
+<span class="code-keyword">for</span> col <span class="code-keyword">in</span> collections:
+    print(f<span class="code-string">"{col.name}: {col.count()} documents"</span>)
+
+<span class="code-comment"># Get collection stats</span>
+print(f<span class="code-string">"Total documents: {collection.count()}"</span>)
+
+<span class="code-comment"># Delete specific documents</span>
+collection.<span class="code-function">delete</span>(ids=[<span class="code-string">"hanwha_xnv8080r_chunk_1"</span>])
+
+<span class="code-comment"># Delete by metadata filter</span>
+collection.<span class="code-function">delete</span>(where={<span class="code-string">"vendor"</span>: <span class="code-string">"bosch"</span>})
+
+<span class="code-comment"># Delete entire collection</span>
+client.<span class="code-function">delete_collection</span>(name=<span class="code-string">"camera_docs"</span>)
+
+<span class="code-comment"># Update document metadata</span>
+collection.<span class="code-function">update</span>(
+    ids=[<span class="code-string">"hanwha_xnv8080r_chunk_1"</span>],
+    metadatas=[{<span class="code-string">"vendor"</span>: <span class="code-string">"hanwha"</span>, <span class="code-string">"reviewed"</span>: <span class="code-keyword">True</span>}]
+)</div>
+
+        <h2>Project File Structure</h2>
+
+        <div class="diagram">
+platonicam_guru/
+├── chroma_db/                    <span style="color: #6272a4;">← ChromaDB persistent storage</span>
+│   ├── chroma.sqlite3            <span style="color: #6272a4;">← Metadata & index</span>
+│   └── [uuid]/                   <span style="color: #6272a4;">← Embedding data</span>
+│       ├── data_level0.bin
+│       ├── header.bin
+│       └── length.bin
+├── data/
+│   └── pdfs/                     <span style="color: #6272a4;">← Source PDF files</span>
+└── src/
+    └── vectorstore/
+        └── chroma_store.py       <span style="color: #6272a4;">← Our wrapper module</span></div>
+
+        <div class="warning">
+            <strong>⚠️ .gitignore:</strong> Add <code>chroma_db/</code> to your .gitignore. The database can get large and should be regenerated from source PDFs rather than committed.
+        </div>
+
+        <h2>Performance Tips</h2>
+
+        <table>
+            <tr>
+                <th>Scenario</th>
+                <th>Recommendation</th>
+            </tr>
+            <tr>
+                <td>Batch ingestion</td>
+                <td>Add documents in batches of 100-500 for better performance</td>
+            </tr>
+            <tr>
+                <td>Large collections (>100k docs)</td>
+                <td>Consider using HNSW index parameters for faster search</td>
+            </tr>
+            <tr>
+                <td>Frequent updates</td>
+                <td>Use <code>upsert()</code> instead of delete + add</td>
+            </tr>
+            <tr>
+                <td>Memory constraints</td>
+                <td>Use PersistentClient; data stays on disk until queried</td>
+            </tr>
+        </table>
+
+        <h3>Batch Ingestion Example</h3>
+        <div class="code-block"><span class="code-comment"># Efficient batch adding</span>
+batch_size = <span class="code-number">100</span>
+all_chunks = [...]  <span class="code-comment"># Your processed chunks</span>
+
+<span class="code-keyword">for</span> i <span class="code-keyword">in</span> range(<span class="code-number">0</span>, len(all_chunks), batch_size):
+    batch = all_chunks[i:i + batch_size]
+
+    ids = [chunk[<span class="code-string">'id'</span>] <span class="code-keyword">for</span> chunk <span class="code-keyword">in</span> batch]
+    documents = [chunk[<span class="code-string">'content'</span>] <span class="code-keyword">for</span> chunk <span class="code-keyword">in</span> batch]
+    metadatas = [chunk[<span class="code-string">'metadata'</span>] <span class="code-keyword">for</span> chunk <span class="code-keyword">in</span> batch]
+
+    <span class="code-comment"># Generate embeddings for batch</span>
+    embeddings = [
+        ollama.<span class="code-function">embeddings</span>(model=<span class="code-string">"nomic-embed-text"</span>, prompt=doc)[<span class="code-string">'embedding'</span>]
+        <span class="code-keyword">for</span> doc <span class="code-keyword">in</span> documents
+    ]
+
+    collection.<span class="code-function">add</span>(
+        ids=ids,
+        embeddings=embeddings,
+        documents=documents,
+        metadatas=metadatas
+    )
+
+    print(f<span class="code-string">"Added batch {i//batch_size + 1}"</span>)</div>
+
+        <h2>Troubleshooting</h2>
+
+        <h3>"Collection not found" Error</h3>
+        <div class="step-box">
+            <p>Use <code>get_or_create_collection()</code> instead of <code>get_collection()</code> to auto-create if missing.</p>
+        </div>
+
+        <h3>Duplicate ID Error</h3>
+        <div class="step-box">
+            <p>ChromaDB requires unique IDs. Use <code>upsert()</code> to update existing documents:</p>
+            <div class="code-block">collection.<span class="code-function">upsert</span>(ids=[...], embeddings=[...], documents=[...])</div>
+        </div>
+
+        <h3>Slow Queries</h3>
+        <div class="step-box">
+            <p>Reduce <code>n_results</code> or add metadata filters to narrow the search space.</p>
+        </div>
+
+        <div class="success">
+            <strong>✓ Ready for Sprint 2!</strong> You now understand how ChromaDB stores and retrieves embeddings. Combined with Ollama's <code>nomic-embed-text</code>, you have the foundation for semantic search over your camera documentation.
+        </div>
+
+    </div>
+</body>
+</html>

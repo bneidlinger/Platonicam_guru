@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Development Plan - Surveillance Design Assistant</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.7; color: #333; max-width: 1000px; margin: 40px auto; padding: 20px; background-color: #f4f7f6; }
+        .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 15px; }
+        h2 { color: #2980b9; margin-top: 40px; border-left: 4px solid #3498db; padding-left: 15px; }
+        h3 { color: #34495e; margin-top: 25px; }
+        .sprint-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin: 30px 0 20px 0; }
+        .sprint-box h2 { color: white; border: none; margin: 0; padding: 0; }
+        .sprint-box .duration { opacity: 0.9; font-size: 0.95em; margin-top: 5px; }
+        .task-list { background: #f8f9fa; padding: 20px; border-radius: 6px; margin: 15px 0; }
+        .task-list li { margin: 10px 0; }
+        .deliverable { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin: 15px 0; }
+        .deliverable strong { color: #2e7d32; }
+        .tech-note { background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 15px 0; }
+        .tech-note strong { color: #e65100; }
+        code { background: #ecf0f1; padding: 2px 8px; border-radius: 4px; font-family: 'Consolas', monospace; }
+        .folder-structure { background: #263238; color: #aed581; padding: 20px; border-radius: 6px; font-family: 'Consolas', monospace; white-space: pre; overflow-x: auto; }
+        .milestone { display: inline-block; background: #9c27b0; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.85em; margin: 5px 5px 5px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Development Plan: Surveillance Design Assistant</h1>
+        <p><strong>Project Goal:</strong> Build a local-first RAG system to parse vendor PDFs and provide design intelligence for Physical Security Systems Engineering.</p>
+
+        <h2>Project Structure</h2>
+        <div class="folder-structure">
+platonicam_guru/
+├── data/
+│   └── pdfs/                  # Vendor PDF library (gitignored)
+│       ├── hanwha/
+│       ├── axis/
+│       └── bosch/
+├── assets/
+│   └── images/                # Extracted PDF images (gitignored)
+├── src/
+│   ├── __init__.py
+│   ├── parser/                # PDF extraction modules
+│   │   ├── __init__.py
+│   │   ├── pdf_parser.py
+│   │   └── metadata_extractor.py  # Regex-based field extraction
+│   ├── embeddings/            # Vector embedding logic
+│   │   ├── __init__.py
+│   │   └── ollama_embed.py
+│   ├── vectorstore/           # ChromaDB operations
+│   │   ├── __init__.py
+│   │   └── chroma_store.py
+│   └── rag/                   # RAG chain and retrieval
+│       ├── __init__.py
+│       └── retriever.py
+├── app/
+│   └── streamlit_app.py       # Web UI
+├── config/
+│   └── settings.py            # Configuration constants
+├── tests/
+├── docs/
+├── requirements.txt
+├── .gitignore
+└── CLAUDE.md</div>
+
+        <!-- SPRINT 1 -->
+        <div class="sprint-box">
+            <h2>Sprint 1: Foundation & PDF Ingestion</h2>
+            <div class="duration">Focus: Environment setup, PDF parsing, image extraction, structured metadata</div>
+        </div>
+
+        <h3>Tasks</h3>
+        <div class="task-list">
+            <ul>
+                <li><strong>1.1</strong> Set up Python 3.11+ virtual environment</li>
+                <li><strong>1.2</strong> Install and configure Ollama on Windows (see: <code>ollama_setup_guide.html</code>)</li>
+                <li><strong>1.3</strong> Create project folder structure (including <code>assets/images/</code>)</li>
+                <li><strong>1.4</strong> Build PDF parser module using PyMuPDF</li>
+                <li><strong>1.5</strong> Implement RecursiveCharacterTextSplitter (1200 chars, 150 overlap)</li>
+                <li><strong>1.6</strong> Build image extraction pipeline (save to <code>assets/images/</code>)</li>
+                <li><strong>1.7</strong> Create regex-based metadata extractor (see: <code>meta_data_strat.html</code>)</li>
+                <li><strong>1.8</strong> Implement tiered metadata schema (Document/Engineering/Visual)</li>
+                <li><strong>1.9</strong> Create batch processing script for PDF library</li>
+                <li><strong>1.10</strong> Write unit tests for parser and metadata modules</li>
+            </ul>
+        </div>
+
+        <div class="deliverable">
+            <strong>Deliverables:</strong>
+            <ul>
+                <li>Working PDF parser with text + image extraction</li>
+                <li>Structured metadata: <code>model_num</code>, <code>poe_wattage</code>, <code>poe_class</code>, <code>brand</code>, <code>doc_type</code></li>
+                <li>Image assets linked to text chunks via <code>image_refs</code> metadata</li>
+                <li>Ollama running locally with base models downloaded</li>
+            </ul>
+        </div>
+
+        <div class="tech-note">
+            <strong>Technical Notes:</strong>
+            <ul>
+                <li>Chunk size: 1200 chars with 150 overlap (optimized for spec tables)</li>
+                <li>Regex patterns for model numbers: <code>[A-Z]{1,4}-[A-Z0-9]{4,10}</code></li>
+                <li>PoE wattage pattern: <code>\d{1,2}\.?\d?\s?W</code> (excludes WDR false matches)</li>
+                <li>Image naming: <code>{filename}_p{page}_i{index}.{ext}</code></li>
+            </ul>
+        </div>
+
+        <p><span class="milestone">Milestone: Parse 10+ PDFs with extracted metadata and images</span></p>
+
+        <!-- SPRINT 2 -->
+        <div class="sprint-box" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+            <h2>Sprint 2: Vector Store & Embeddings</h2>
+            <div class="duration">Focus: ChromaDB integration, Ollama embeddings, semantic search</div>
+        </div>
+
+        <h3>Tasks</h3>
+        <div class="task-list">
+            <ul>
+                <li><strong>2.1</strong> Install and configure ChromaDB (see: <code>chromadb_setup_guide.html</code>)</li>
+                <li><strong>2.2</strong> Create embedding module using Ollama's <code>nomic-embed-text</code></li>
+                <li><strong>2.3</strong> Design ChromaDB collection schema with metadata fields</li>
+                <li><strong>2.4</strong> Build ingestion pipeline: PDF → Chunks → Embeddings → ChromaDB</li>
+                <li><strong>2.5</strong> Implement similarity search with metadata filtering</li>
+                <li><strong>2.6</strong> Add incremental update support (avoid re-embedding unchanged PDFs)</li>
+                <li><strong>2.7</strong> Create CLI tool for ingestion and search testing</li>
+                <li><strong>2.8</strong> Write integration tests for vector operations</li>
+            </ul>
+        </div>
+
+        <div class="deliverable">
+            <strong>Deliverables:</strong>
+            <ul>
+                <li>Populated ChromaDB with embedded PDF chunks</li>
+                <li>Working semantic search via CLI</li>
+                <li>Metadata filtering by vendor/model</li>
+            </ul>
+        </div>
+
+        <div class="tech-note">
+            <strong>Technical Notes:</strong>
+            <ul>
+                <li>Use <code>nomic-embed-text</code> for embeddings (768 dimensions, runs locally)</li>
+                <li>ChromaDB persistent storage in <code>./chroma_db/</code></li>
+                <li><strong>Tiered Metadata Schema:</strong>
+                    <ul>
+                        <li>Tier 1 (Document): <code>vendor</code>, <code>doc_type</code>, <code>source_file</code></li>
+                        <li>Tier 2 (Engineering): <code>model_num</code>, <code>poe_wattage</code>, <code>poe_class</code>, <code>brand</code></li>
+                        <li>Tier 3 (Visual): <code>image_refs</code>, <code>page_num</code>, <code>chunk_index</code></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+
+        <div class="tech-note" style="background: #e8f5e9; border-color: #4caf50;">
+            <strong>Design Principle:</strong> Use LLMs for <em>summarization and natural language</em>; use Metadata for <em>computation and verification</em>. POE budgets come from <code>poe_wattage</code> metadata sums—no LLM hallucination of numbers.
+        </div>
+
+        <p><span class="milestone">Milestone: Query "XNV-8080R power consumption" returns correct spec from metadata</span></p>
+
+        <!-- SPRINT 3 -->
+        <div class="sprint-box" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <h2>Sprint 3: RAG Chain & LLM Integration</h2>
+            <div class="duration">Focus: Context retrieval, prompt engineering, response generation</div>
+        </div>
+
+        <h3>Tasks</h3>
+        <div class="task-list">
+            <ul>
+                <li><strong>3.1</strong> Configure Ollama with Llama 3.1 8B (or Phi-4 for lower VRAM)</li>
+                <li><strong>3.2</strong> Build RAG retriever module with configurable top-k</li>
+                <li><strong>3.3</strong> Design system prompts for security engineering domain</li>
+                <li><strong>3.4</strong> Implement context injection with source citations</li>
+                <li><strong>3.5</strong> Add conversation memory for follow-up questions</li>
+                <li><strong>3.6</strong> Create specialized prompts for POE budgeting queries</li>
+                <li><strong>3.7</strong> Create specialized prompts for accessory matching queries</li>
+                <li><strong>3.8</strong> Build response formatting with structured output</li>
+            </ul>
+        </div>
+
+        <div class="deliverable">
+            <strong>Deliverables:</strong>
+            <ul>
+                <li>Working RAG chain: Query → Retrieve → Generate</li>
+                <li>Domain-tuned prompts for surveillance design</li>
+                <li>Responses with source citations</li>
+            </ul>
+        </div>
+
+        <div class="tech-note">
+            <strong>Technical Notes:</strong>
+            <ul>
+                <li>Top-k retrieval: Start with k=5, tune based on context window</li>
+                <li>Temperature: 0.1-0.3 for factual responses</li>
+                <li>Include source filename and page in every response</li>
+            </ul>
+        </div>
+
+        <p><span class="milestone">Milestone: "What mount fits the XNP-6400RW?" returns correct pendant</span></p>
+
+        <!-- SPRINT 4 -->
+        <div class="sprint-box" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <h2>Sprint 4: Streamlit UI & Polish</h2>
+            <div class="duration">Focus: Web interface, project management, production hardening</div>
+        </div>
+
+        <h3>Tasks</h3>
+        <div class="task-list">
+            <ul>
+                <li><strong>4.1</strong> Create Streamlit app with chat interface</li>
+                <li><strong>4.2</strong> Add vendor filter sidebar (Hanwha/Axis/Bosch)</li>
+                <li><strong>4.3</strong> Build "Project Mode" for tracking camera selections</li>
+                <li><strong>4.4</strong> Implement POE budget calculator (uses <code>poe_wattage</code> metadata, not LLM)</li>
+                <li><strong>4.5</strong> Display extracted images alongside search results</li>
+                <li><strong>4.6</strong> Add PDF upload for on-the-fly ingestion</li>
+                <li><strong>4.7</strong> Create export functionality (CSV/JSON for project BOMs)</li>
+                <li><strong>4.8</strong> Add error handling and loading states</li>
+                <li><strong>4.9</strong> Write user documentation</li>
+            </ul>
+        </div>
+
+        <div class="deliverable">
+            <strong>Deliverables:</strong>
+            <ul>
+                <li>Fully functional Streamlit web app</li>
+                <li>Project tracking with metadata-driven POE calculations</li>
+                <li>Visual accessory verification via extracted images</li>
+                <li>Export capability for design documents</li>
+            </ul>
+        </div>
+
+        <div class="tech-note">
+            <strong>Technical Notes:</strong>
+            <ul>
+                <li>Streamlit session state for conversation history</li>
+                <li>Use <code>st.chat_message</code> for modern chat UI</li>
+                <li>Cache ChromaDB connection with <code>@st.cache_resource</code></li>
+                <li>POE calculation: <code>sum([doc.metadata['poe_wattage'] for doc in project_cameras])</code></li>
+            </ul>
+        </div>
+
+        <p><span class="milestone">Milestone: Complete design session with exported BOM</span></p>
+
+        <!-- Dependencies -->
+        <h2>Dependencies & Requirements</h2>
+        <table>
+            <tr>
+                <th>Package</th>
+                <th>Version</th>
+                <th>Purpose</th>
+            </tr>
+            <tr><td>python</td><td>3.11+</td><td>Runtime</td></tr>
+            <tr><td>pymupdf</td><td>1.24+</td><td>PDF parsing</td></tr>
+            <tr><td>langchain</td><td>0.2+</td><td>Text splitting, chains</td></tr>
+            <tr><td>langchain-community</td><td>0.2+</td><td>Ollama integration</td></tr>
+            <tr><td>chromadb</td><td>0.5+</td><td>Vector storage</td></tr>
+            <tr><td>ollama</td><td>0.3+</td><td>Python client</td></tr>
+            <tr><td>streamlit</td><td>1.37+</td><td>Web UI</td></tr>
+        </table>
+
+        <h2>Risk Mitigation</h2>
+        <table>
+            <tr>
+                <th>Risk</th>
+                <th>Mitigation</th>
+            </tr>
+            <tr>
+                <td>PDF tables not parsing correctly</td>
+                <td>Use PyMuPDF's table extraction; fallback to manual regex patterns</td>
+            </tr>
+            <tr>
+                <td>Ollama VRAM limitations</td>
+                <td>Start with Phi-4 (3B); scale to Llama 3.1 8B if hardware supports</td>
+            </tr>
+            <tr>
+                <td>Slow embedding generation</td>
+                <td>Batch processing; incremental updates; persist embeddings</td>
+            </tr>
+            <tr>
+                <td>Inconsistent vendor data formats</td>
+                <td>Vendor-specific parsing rules in metadata</td>
+            </tr>
+        </table>
+
+    </div>
+</body>
+</html>
