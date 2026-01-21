@@ -27,8 +27,10 @@ class MetadataExtractor:
 
     # Regex patterns for surveillance equipment data
     PATTERNS = {
-        # Model numbers: XNV-8080R, XNP-6400RW, P3265-LVE, NBE-3502, etc.
-        "model_num": r"\b([A-Z]{1,4}[-]?[A-Z0-9]{3,10}(?:[-][A-Z0-9]+)?)\b",
+        # Model numbers: XNV-8080R, XNP-6400RW, P3265-LVE, NBE-3502, VB-H47, etc.
+        # MUST contain at least one digit (lookahead ensures this)
+        # Prevents matching plain hyphenated words like "E-MAIL", "ONE-SHOT"
+        "model_num": r"\b((?=[A-Z0-9-]*[0-9])[A-Z]{1,4}[-]?[A-Z0-9]{2,10}(?:[-][A-Z0-9]+)?)\b",
 
         # PoE wattage: 12.9W, 25.5 W, 8W (excludes WDR false positives)
         "poe_wattage": r"(\d{1,2}\.?\d?)\s?W(?:atts?)?(?!\s*D)",
@@ -65,6 +67,12 @@ class MetadataExtractor:
             for key, pattern in self.PATTERNS.items()
         }
 
+    # Common false positives that match model number pattern but aren't cameras
+    MODEL_BLOCKLIST_PREFIXES = (
+        "IEEE", "HTTP", "HTTPS", "RFC", "IPV", "IP6", "RJ4", "IK1", "AES",
+        "USB", "HDMI", "H26", "H27", "MPEG", "MJPEG", "CNS", "GB2", "UL9",
+    )
+
     def extract_model_numbers(self, text: str) -> list[str]:
         """
         Extract all model numbers from text.
@@ -77,22 +85,31 @@ class MetadataExtractor:
         result = []
         for m in matches:
             upper = m.upper()
-            if upper not in seen and len(upper) >= 4:  # Filter out short false positives
+            # Filter out short matches and known false positives
+            if (upper not in seen and
+                len(upper) >= 4 and
+                not upper.startswith(self.MODEL_BLOCKLIST_PREFIXES)):
                 seen.add(upper)
                 result.append(upper)
         return result
+
+    # Realistic PoE wattage range for cameras (0.5W - 100W)
+    MIN_POE_WATTAGE = 0.5
+    MAX_POE_WATTAGE = 100.0
 
     def extract_poe_wattage(self, text: str) -> Optional[float]:
         """
         Extract PoE power consumption value.
 
-        Returns the first (typically max) wattage found, or None.
+        Returns the highest realistic wattage found, or None.
         """
         matches = self._compiled_patterns["poe_wattage"].findall(text)
         if matches:
             try:
-                # Return highest value (usually max power consumption)
-                return max(float(m) for m in matches)
+                # Filter to realistic range and return max
+                valid = [float(m) for m in matches
+                        if self.MIN_POE_WATTAGE <= float(m) <= self.MAX_POE_WATTAGE]
+                return max(valid) if valid else None
             except ValueError:
                 return None
         return None

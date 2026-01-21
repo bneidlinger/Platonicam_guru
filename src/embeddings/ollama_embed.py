@@ -117,8 +117,12 @@ class OllamaEmbedder:
             True if model is available.
         """
         try:
-            models = self.client.list()
-            model_names = [m["name"] for m in models.get("models", [])]
+            response = self.client.list()
+            # Handle both old dict format and new object format
+            if hasattr(response, 'models'):
+                model_names = [m.model for m in response.models]
+            else:
+                model_names = [m["name"] for m in response.get("models", [])]
             # Check both exact match and with :latest tag
             return (
                 self.model in model_names or

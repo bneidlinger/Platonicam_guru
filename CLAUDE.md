@@ -6,18 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Enterprise Surveillance Design Assistant - A local-first RAG (Retrieval-Augmented Generation) system for parsing vendor PDFs (Hanwha, Axis, Bosch) and providing design-level intelligence for Physical Security Systems Engineering.
 
-## Architecture
-
-```
-[PDF Library] -> [PyMuPDF Parser] -> [Text + Image Extraction]
--> [Regex Metadata Extraction] -> [Recursive Character Splitting]
--> [Ollama Embedding (nomic-embed-text)] -> [ChromaDB Vector Store]
--> [User Query] -> [RAG Chain] -> [Llama 3.1 8B] -> [Streamlit UI]
-```
-
 ## Design Principle
 
-**LLMs for summarization, Metadata for computation.** POE budgets and numerical calculations use extracted metadata fields—never LLM-generated numbers.
+**LLMs for summarization, Metadata for computation.** POE budgets and numerical calculations use extracted metadata fields—never LLM-generated numbers. The `MetadataExtractor` uses regex patterns to extract model numbers, wattage, and PoE class, which are stored in ChromaDB metadata and used directly for calculations via `store.calculate_poe_budget()`.
 
 ## Commands
 
@@ -25,7 +16,7 @@ Enterprise Surveillance Design Assistant - A local-first RAG (Retrieval-Augmente
 # Install dependencies
 pip install -r requirements.txt
 
-# Pull Ollama models (required)
+# Pull Ollama models (required before first run)
 ollama pull nomic-embed-text
 ollama pull llama3.1:8b
 
@@ -36,6 +27,7 @@ python -m src.ingest --clear --force
 
 # CLI Chat (streaming)
 python -m src.chat
+python -m src.chat "What mount fits the XNV-8080R?"
 
 # CLI Search
 python -m src.search "power consumption"
@@ -43,81 +35,49 @@ python -m src.search --poe "XNV-8080R,P3265-LVE"
 
 # Streamlit Web UI
 python run_app.py
-# or: streamlit run app/streamlit_app.py
 
 # Run tests
 pytest
 pytest tests/test_metadata_extractor.py -v
+pytest tests/test_metadata_extractor.py::TestPoEWattageExtraction -v  # single test class
+pytest -k "test_hanwha"  # run tests matching pattern
 ```
 
-## Tech Stack
-
-- **Backend**: Python 3.11+
-- **LLM Engine**: Ollama (local) - `llama3.1:8b` for chat, `nomic-embed-text` for embeddings
-- **Vector DB**: ChromaDB (persistent, stored in `./chroma_db/`)
-- **UI**: Streamlit (multi-page app)
-- **PDF Parsing**: PyMuPDF (fitz) - text and image extraction
-- **Text Splitting**: LangChain RecursiveCharacterTextSplitter (chunk_size=1200, overlap=150)
-
-## Project Structure
+## Architecture
 
 ```
-platonicam_guru/
-├── app/
-│   ├── streamlit_app.py     # Main chat UI
-│   └── pages/
-│       ├── 1_📁_Ingestion.py  # PDF upload & processing
-│       └── 2_🔍_Database.py   # Search & browse
-├── src/
-│   ├── parser/
-│   │   ├── pdf_parser.py         # Text + image extraction
-│   │   ├── metadata_extractor.py # Regex field extraction
-│   │   └── batch_processor.py    # Batch processing
-│   ├── embeddings/
-│   │   └── ollama_embed.py       # Embedding generation
-│   ├── vectorstore/
-│   │   └── chroma_store.py       # ChromaDB operations
-│   ├── rag/
-│   │   ├── llm_client.py         # Ollama chat client
-│   │   ├── retriever.py          # Context retrieval
-│   │   ├── prompts.py            # System prompts
-│   │   ├── memory.py             # Conversation memory
-│   │   └── chain.py              # RAG orchestrator
-│   ├── ingest.py                 # Ingestion pipeline CLI
-│   ├── search.py                 # Search CLI
-│   └── chat.py                   # Chat CLI
-├── config/
-│   └── settings.py               # Configuration
-├── tests/
-├── data/pdfs/{vendor}/           # Source PDFs (gitignored)
-├── assets/images/                # Extracted images (gitignored)
-├── chroma_db/                    # Vector store (gitignored)
-└── docs/                         # Setup guides
+PDF → PyMuPDF → Text + Images → MetadataExtractor (regex) → Chunking
+    → Ollama nomic-embed-text → ChromaDB
+
+Query → RAGChain.query() → classify_query() → route to handler
+    → Retriever → ChromaDB → context + metadata
+    → Prompt template → Ollama llama3.1:8b → Response
 ```
 
-## Metadata Schema (Tiered)
-
-- **Tier 1 (Document)**: `vendor`, `doc_type`, `source_file`
-- **Tier 2 (Engineering)**: `model_num`, `poe_wattage`, `poe_class`, `brand`
-- **Tier 3 (Visual)**: `image_refs`, `page_num`, `chunk_index`
+**Query Classification** (`src/rag/prompts.py:classify_query`): Routes queries to specialized handlers:
+- `poe` - Power consumption queries → uses `POE_QUERY_TEMPLATE` with verified metadata
+- `accessory` - Mount/bracket queries → uses `ACCESSORY_QUERY_TEMPLATE`
+- `comparison` - Model comparisons → extracts models, retrieves context for each
+- `general` - Standard RAG with conversation memory support
 
 ## Key Modules
 
-- `RAGChain` - Main orchestrator with query classification (POE, accessory, comparison, spec, general)
-- `ChromaStore` - Vector storage with metadata filtering and POE budget calculation
-- `MetadataExtractor` - Regex patterns for model numbers, wattage, PoE class
-- `ConversationMemory` - Multi-turn support with follow-up detection
+- `RAGChain` (`src/rag/chain.py`) - Main orchestrator; routes queries to specialized handlers based on classification
+- `ChromaStore` (`src/vectorstore/chroma_store.py`) - Vector storage, metadata filtering, `calculate_poe_budget()` for direct computation
+- `MetadataExtractor` (`src/parser/metadata_extractor.py`) - Regex patterns extract `model_num`, `poe_wattage`, `poe_class`, `brand` from text
+- `ConversationMemory` (`src/rag/memory.py`) - Tracks models discussed; detects follow-up questions
+- `Retriever` (`src/rag/retriever.py`) - Context retrieval with specialized methods for POE, accessories, comparisons
 
-## Streamlit Pages
+## Configuration
 
-1. **Chat** (main) - RAG-powered conversation with source citations
-2. **Ingestion** - PDF upload, batch processing, database management
-3. **Database** - Search, browse, POE lookup
+Edit `config/settings.py` for:
+- `CHUNK_SIZE` (1200) / `CHUNK_OVERLAP` (150)
+- `EMBEDDING_MODEL`, `CHAT_MODEL`, `TEMPERATURE`
+- `TOP_K` retrieval count (5)
+- `OLLAMA_HOST` (http://localhost:11434)
 
-## Development Notes
+## Data Layout
 
-- Query classification routes to specialized prompts (POE, accessory, comparison)
-- POE calculations use `store.calculate_poe_budget()` - metadata only
-- Conversation memory tracks models discussed for context
-- Embeddings: 768 dimensions (nomic-embed-text)
-- Top-k retrieval: 5 chunks default
+- `data/pdfs/{hanwha,axis,bosch}/` - Source PDFs (gitignored)
+- `chroma_db/` - Persistent vector store (gitignored)
+- `assets/images/` - Extracted images (gitignored)

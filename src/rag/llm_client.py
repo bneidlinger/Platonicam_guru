@@ -137,8 +137,12 @@ class OllamaLLM:
         Check if the chat model is available in Ollama.
         """
         try:
-            models = self.client.list()
-            model_names = [m["name"] for m in models.get("models", [])]
+            response = self.client.list()
+            # Handle both old dict format and new object format
+            if hasattr(response, 'models'):
+                model_names = [m.model for m in response.models]
+            else:
+                model_names = [m["name"] for m in response.get("models", [])]
             return (
                 self.model in model_names or
                 f"{self.model}:latest" in model_names
