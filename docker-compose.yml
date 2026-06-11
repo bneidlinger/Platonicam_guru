@@ -1,0 +1,46 @@
+# Surveillance Design Assistant - API + Ollama sidecar
+#
+# First run:
+#   docker compose up -d
+#   docker compose exec ollama ollama pull nomic-embed-text
+#   docker compose exec ollama ollama pull llama3.1:8b
+#   # drop PDFs into ./data/pdfs/{hanwha,axis,bosch}/ then either:
+#   docker compose exec api python -m src.ingest
+#   # or POST /admin/ingest with your API key
+#
+# API at http://localhost:8000 (interactive docs at /docs)
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-models:/root/.ollama
+    # Uncomment for NVIDIA GPU acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    restart: unless-stopped
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      PLATONICAM_API_KEY: ${PLATONICAM_API_KEY:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+    volumes:
+      # Vector store, source PDFs, and extracted images persist on the host
+      - ./chroma_db:/app/chroma_db
+      - ./data:/app/data
+      - ./assets:/app/assets
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+volumes:
+  ollama-models:

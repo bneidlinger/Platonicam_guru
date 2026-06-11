@@ -188,6 +188,37 @@ python -m src.search --poe "XNV-8080R,P3265-LVE,NBE-3502-AL"
 python -m src.search -i
 ```
 
+### REST API
+
+```bash
+python run_api.py        # http://localhost:8000 — interactive docs at /docs
+```
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Ollama reachability, model presence, chunk count (always public) |
+| `POST /query` | RAG query — `{"question", "vendor?", "session_id?", "stream?"}`; `stream: true` returns SSE tokens |
+| `POST /poe/budget` | Deterministic PoE budget from verified metadata — `{"models": ["M1075-L", "m1135"]}` (partials resolve) |
+| `GET /models` | All model numbers in the corpus (UI autocomplete) |
+| `GET /stats` | Chunk counts by vendor and document type |
+| `DELETE /sessions/{id}` | Clear a conversation's memory |
+| `POST /admin/ingest` | Background re-ingestion (`vendor?`, `clear?`, `force?`); poll `GET /admin/ingest/status` |
+
+**Auth:** set `PLATONICAM_API_KEY` and send it as the `X-API-Key` header. Without a key the API is open for local dev, but `/admin/*` stays disabled so an exposed dev box can't be wiped. Copy `.env.example` to `.env` for configuration.
+
+**Sessions:** conversation memory is per `session_id`, held in-process with TTL eviction — run a single worker (or sticky routing) until an external session store lands.
+
+### Docker
+
+```bash
+docker compose up -d
+docker compose exec ollama ollama pull nomic-embed-text
+docker compose exec ollama ollama pull llama3.1:8b
+docker compose exec api python -m src.ingest   # after dropping PDFs in ./data/pdfs/
+```
+
+The compose file runs Ollama as a sidecar; `chroma_db/`, `data/`, and `assets/` are host volumes so the image stays stateless. Uncomment the `deploy` block in `docker-compose.yml` for NVIDIA GPU acceleration.
+
 ---
 
 ## 🏗️ Architecture

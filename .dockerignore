@@ -1,0 +1,15 @@
+# Provided as volumes at runtime
+chroma_db/
+data/
+assets/
+
+# Local-only
+venv/
+.env
+.git/
+.claude/
+__pycache__/
+*.pyc
+.pytest_cache/
+screenshot.png
+docs/
