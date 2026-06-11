@@ -47,20 +47,27 @@ class SearchEngine:
             List of matching documents with metadata.
         """
         # Generate query embedding
-        query_embedding = self.embedder.embed_text(query)
+        query_embedding = self.embedder.embed_query(query)
 
-        # Build filter
-        where = {}
+        # Build filter (ChromaDB requires $and for multiple conditions)
+        conditions = []
         if vendor:
-            where["vendor"] = vendor
+            conditions.append({"vendor": vendor})
         if doc_type:
-            where["doc_type"] = doc_type
+            conditions.append({"doc_type": doc_type})
+
+        if not conditions:
+            where = None
+        elif len(conditions) == 1:
+            where = conditions[0]
+        else:
+            where = {"$and": conditions}
 
         # Search
         results = self.store.search(
             query_embedding=query_embedding,
             n_results=n_results,
-            where=where if where else None,
+            where=where,
         )
 
         return results
@@ -77,7 +84,7 @@ class SearchEngine:
             Matching documents for this model.
         """
         search_query = f"{model_num} {query}".strip()
-        query_embedding = self.embedder.embed_text(search_query)
+        query_embedding = self.embedder.embed_query(search_query)
 
         return self.store.search_by_model(
             query_embedding=query_embedding,

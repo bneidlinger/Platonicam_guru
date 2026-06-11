@@ -65,6 +65,7 @@ class OllamaLLM:
             messages=messages,
             options={
                 "temperature": temperature or self.temperature,
+                "num_ctx": Settings.NUM_CTX,
             },
         )
 
@@ -90,6 +91,7 @@ class OllamaLLM:
             messages=messages,
             options={
                 "temperature": temperature or self.temperature,
+                "num_ctx": Settings.NUM_CTX,
             },
         )
 
@@ -125,6 +127,7 @@ class OllamaLLM:
             stream=True,
             options={
                 "temperature": temperature or self.temperature,
+                "num_ctx": Settings.NUM_CTX,
             },
         )
 

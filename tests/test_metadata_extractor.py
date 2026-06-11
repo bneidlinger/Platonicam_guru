@@ -48,6 +48,22 @@ class TestModelNumberExtraction:
         result = extractor.extract_model_numbers(text)
         assert len(result) == 0
 
+    def test_axis_two_digit_model(self, extractor):
+        """FA51/FA54 main units have only two digits."""
+        text = "FA54 Main Unit supports four sensor units"
+        result = extractor.extract_model_numbers(text)
+        assert "FA54" in result
+
+    def test_blocks_compliance_standards(self, extractor):
+        text = "Certified to ISO-9001, MIL-STD-810H, UL294, IEC62471, EN55032 and ECE R118"
+        result = extractor.extract_model_numbers(text)
+        assert result == []
+
+    def test_blocks_connector_names(self, extractor):
+        text = "Network RJ-45 connector, RS-485 serial port"
+        result = extractor.extract_model_numbers(text)
+        assert result == []
+
 
 class TestPoEWattageExtraction:
     """Tests for PoE power consumption extraction."""
@@ -87,6 +103,33 @@ class TestPoEWattageExtraction:
         text = "High resolution camera with advanced features"
         result = extractor.extract_poe_wattage(text)
         assert result is None
+
+    def test_two_decimal_wattage_not_truncated(self, extractor):
+        """Axis prints '12.95 W' (802.3af budget) everywhere; must not become 95W."""
+        text = "Typical 5.4 W, max 12.95 W"
+        result = extractor.extract_poe_wattage(text)
+        assert result == 12.95
+
+    def test_wattage_followed_by_power(self, extractor):
+        text = "XNV-8080R with 25.5W power consumption"
+        result = extractor.extract_poe_wattage(text)
+        assert result == 25.5
+
+    def test_wattage_followed_by_poe(self, extractor):
+        text = "Power consumption: 12.95 W PoE"
+        result = extractor.extract_poe_wattage(text)
+        assert result == 12.95
+
+    def test_max_label_beats_larger_unlabeled(self, extractor):
+        """PoE class budget mentions must not shadow the labeled max draw."""
+        text = "PoE Class 4 (30 W). Typical 5.4 W, max 12.95 W"
+        result = extractor.extract_poe_wattage(text)
+        assert result == 12.95
+
+    def test_rejects_number_before_w_word(self, extractor):
+        assert extractor.extract_poe_wattage("2 wire connection") is None
+        assert extractor.extract_poe_wattage("delivers 95 white LEDs") is None
+        assert extractor.extract_poe_wattage("1080p with WDR") is None
 
 
 class TestPoEClassExtraction:

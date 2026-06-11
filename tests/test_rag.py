@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.rag.prompts import classify_query, format_context, format_poe_data
 from src.rag.memory import ConversationMemory, SessionManager
+from src.rag.retriever import Retriever
 
 
 class TestQueryClassification:
@@ -125,6 +126,25 @@ class TestFormatPOEData:
         assert "Missing" in result or "UNKNOWN-MODEL" in result
 
 
+class TestWhereFilter:
+    """ChromaDB rejects flat multi-key where dicts; verify $and construction."""
+
+    def test_no_conditions(self):
+        assert Retriever._build_where() is None
+
+    def test_single_condition_stays_flat(self):
+        assert Retriever._build_where(vendor="Axis") == {"vendor": "axis"}
+
+    def test_multiple_conditions_use_and(self):
+        where = Retriever._build_where(doc_type="accessory", model_num="m1135-e")
+        assert where == {"$and": [{"doc_type": "accessory"}, {"model_num": "M1135-E"}]}
+
+    def test_all_three_conditions(self):
+        where = Retriever._build_where(vendor="axis", doc_type="datasheet", model_num="M1075-L")
+        assert "$and" in where
+        assert len(where["$and"]) == 3
+
+
 class TestConversationMemory:
     """Tests for conversation memory."""
 
@@ -175,6 +195,14 @@ class TestConversationMemory:
         assert memory.is_followup("What about its power consumption?")
         assert memory.is_followup("And the mount options?")
         assert not memory.is_followup("Tell me about P3265-LVE")  # Different topic
+
+    def test_is_followup_requires_whole_words(self, memory):
+        """'it' inside 'with'/'white' must not flag a fresh query as follow-up."""
+        memory.add_user_message("Tell me about XNV-8080R")
+        memory.add_assistant_message("The XNV-8080R is a camera...")
+
+        assert not memory.is_followup("Show me cameras with IR for white light scenes")
+        assert memory.is_followup("Does it have IR?")
 
     def test_history_trimming(self):
         memory = ConversationMemory(max_messages=5)

@@ -21,11 +21,15 @@ class Settings:
     # Embedding configuration
     EMBEDDING_MODEL = "nomic-embed-text"
     EMBEDDING_DIMENSION = 768
+    EMBED_BATCH_SIZE = 32
 
     # LLM configuration
     CHAT_MODEL = "llama3.1:8b"
     TEMPERATURE = 0.2
     TOP_K = 5
+    # Context window for chat calls. Ollama's default (2048-4096) silently
+    # truncates RAG prompts; llama3.1 supports far more.
+    NUM_CTX = 8192
 
     # Ollama API
     OLLAMA_HOST = "http://localhost:11434"

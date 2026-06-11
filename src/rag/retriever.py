@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config.settings import Settings
 from src.embeddings.ollama_embed import OllamaEmbedder
 from src.vectorstore.chroma_store import ChromaStore
+from src.parser.metadata_extractor import MetadataExtractor
 from src.rag.prompts import format_context, format_poe_data, format_metadata_summary
 
 
@@ -30,6 +31,34 @@ class Retriever:
         self.embedder = embedder or OllamaEmbedder()
         self.store = store or ChromaStore()
         self.top_k = top_k
+        self._extractor = MetadataExtractor()
+        self._model_cache: Optional[set[str]] = None
+
+    @staticmethod
+    def _build_where(
+        vendor: Optional[str] = None,
+        doc_type: Optional[str] = None,
+        model_num: Optional[str] = None,
+    ) -> Optional[dict]:
+        """
+        Build a ChromaDB where filter.
+
+        ChromaDB rejects flat multi-key dicts; two or more conditions must be
+        wrapped in {"$and": [...]}.
+        """
+        conditions = []
+        if vendor:
+            conditions.append({"vendor": vendor.lower()})
+        if doc_type:
+            conditions.append({"doc_type": doc_type.lower()})
+        if model_num:
+            conditions.append({"model_num": model_num.upper()})
+
+        if not conditions:
+            return None
+        if len(conditions) == 1:
+            return conditions[0]
+        return {"$and": conditions}
 
     def retrieve(
         self,
@@ -38,6 +67,7 @@ class Retriever:
         vendor: Optional[str] = None,
         doc_type: Optional[str] = None,
         model_num: Optional[str] = None,
+        contains: Optional[str] = None,
     ) -> list[dict]:
         """
         Retrieve relevant documents for a query.
@@ -47,54 +77,114 @@ class Retriever:
             n_results: Override default top_k.
             vendor: Filter by vendor.
             doc_type: Filter by document type.
-            model_num: Filter by model number.
+            model_num: Filter by model number (exact metadata match).
+            contains: Require this string in the document text.
 
         Returns:
             List of relevant documents with content and metadata.
         """
-        # Generate query embedding
-        query_embedding = self.embedder.embed_text(query)
+        query_embedding = self.embedder.embed_query(query)
 
-        # Build filter
-        where = {}
-        if vendor:
-            where["vendor"] = vendor.lower()
-        if doc_type:
-            where["doc_type"] = doc_type.lower()
-        if model_num:
-            where["model_num"] = model_num.upper()
-
-        # Search
         results = self.store.search(
             query_embedding=query_embedding,
             n_results=n_results or self.top_k,
-            where=where if where else None,
+            where=self._build_where(vendor=vendor, doc_type=doc_type, model_num=model_num),
+            where_document={"$contains": contains} if contains else None,
         )
 
         return results
+
+    def _known_model_nums(self) -> set[str]:
+        """Cached set of model_num values present in the store."""
+        if self._model_cache is None:
+            self._model_cache = self.store.list_model_numbers()
+        return self._model_cache
+
+    def refresh_model_cache(self) -> None:
+        """Drop the cached model list (call after ingestion)."""
+        self._model_cache = None
+
+    def _resolve_models(self, model: str, limit: int = 4) -> list[str]:
+        """
+        Map a (possibly partial) model reference to model_num values that
+        actually exist in the store.
+
+        "M1075-L" -> ["M1075-L"]; "M1075" -> ["M1075-L"]; "P3265" -> all
+        P3265 variants. Returns [] when nothing matches.
+        """
+        model = model.upper()
+        known = self._known_model_nums()
+
+        if model in known:
+            return [model]
+
+        # Partial reference: user typed a prefix of the stored model
+        prefixed = sorted(m for m in known if m.startswith(model))
+        if prefixed:
+            return prefixed[:limit]
+
+        # Reference longer than the stored tag (e.g. trailing revision suffix)
+        contained = sorted(
+            (m for m in known if model.startswith(m)),
+            key=len,
+            reverse=True,
+        )
+        return contained[:1]
+
+    def resolve_model_references(self, models: list[str]) -> list[str]:
+        """
+        Resolve (possibly partial) model references to stored model tags.
+
+        Unresolvable references pass through uppercased so callers can report
+        them as missing instead of silently dropping them.
+        """
+        resolved_list = []
+        for model in models:
+            for resolved in self._resolve_models(model) or [model.upper()]:
+                if resolved not in resolved_list:
+                    resolved_list.append(resolved)
+        return resolved_list
 
     def retrieve_for_models(self, models: list[str], query: str = "") -> list[dict]:
         """
         Retrieve documents for specific camera models.
 
+        Fallback tiers per model, so a recognized model reference never
+        produces an empty context:
+        1. Exact/resolved model_num metadata filter.
+        2. Document-text $contains match (covers variants that only appear
+           in prose or related_models).
+        3. Plain semantic search.
+
         Args:
-            models: List of model numbers.
+            models: List of model numbers (may be partial references).
             query: Optional additional query context.
 
         Returns:
-            Combined results for all models.
+            Combined deduplicated results for all models.
         """
         all_results = []
         seen_ids = set()
+        per_model = self.top_k if len(models) == 1 else 3
 
         for model in models:
-            # Search with model filter
+            model = model.upper()
             search_query = f"{model} {query}".strip()
-            results = self.retrieve(
-                query=search_query,
-                model_num=model,
-                n_results=3,  # Fewer per model when combining
-            )
+
+            results = []
+            resolved = self._resolve_models(model)
+            per_resolved = per_model if len(resolved) <= 1 else max(2, per_model // len(resolved))
+            for resolved_model in resolved:
+                results.extend(self.retrieve(
+                    query=search_query,
+                    model_num=resolved_model,
+                    n_results=per_resolved,
+                ))
+
+            if not results:
+                results = self.retrieve(search_query, n_results=per_model, contains=model)
+            if not results:
+                results = self.retrieve(search_query, n_results=per_model)
 
             for result in results:
                 # Deduplicate
@@ -160,7 +250,11 @@ class Retriever:
 
         # Get verified POE data from metadata
         if models:
-            poe_info = self.store.calculate_poe_budget(models)
+            # Resolve partial references; unresolvable ones surface in the
+            # "missing" list instead of vanishing.
+            poe_info = self.store.calculate_poe_budget(
+                self.resolve_model_references(models)
+            )
         else:
             # Extract models from results
             result_models = []
@@ -195,6 +289,11 @@ class Retriever:
         Returns:
             Dict with context, results, and image references.
         """
+        # Resolve partial model references to stored tags
+        if model_num:
+            resolved = self._resolve_models(model_num)
+            model_num = resolved[0] if resolved else model_num
+
         # Search in accessory documents
         results = self.retrieve(
             query=query,
@@ -202,14 +301,17 @@ class Retriever:
             model_num=model_num,
         )
 
-        # If not enough results, also search general docs
-        if len(results) < 3:
-            general_results = self.retrieve(query=query, model_num=model_num)
+        # If not enough results, widen: model-only, then unfiltered semantic
+        for fallback_kwargs in ({"model_num": model_num}, {}):
+            if len(results) >= 3:
+                break
+            general_results = self.retrieve(query=query, **fallback_kwargs)
             # Merge, avoiding duplicates
             seen = set(r.get("content", "")[:50] for r in results)
             for r in general_results:
                 if r.get("content", "")[:50] not in seen:
                     results.append(r)
+                    seen.add(r.get("content", "")[:50])
                     if len(results) >= self.top_k:
                         break
 
@@ -233,19 +335,15 @@ class Retriever:
         """
         Extract camera model numbers from text.
 
+        Uses MetadataExtractor for consistent pattern matching.
+
         Args:
             text: Text that may contain model numbers.
 
         Returns:
             List of found model numbers.
         """
-        # Pattern for common camera model formats
-        pattern = r"\b([A-Z]{1,4}[-]?[A-Z0-9]{3,10}(?:[-][A-Z0-9]+)?)\b"
-        matches = re.findall(pattern, text.upper())
-
-        # Filter out common false positives
-        false_positives = {"POE", "IEEE", "RTSP", "HTTP", "HTTPS", "IP66", "IP67"}
-        return [m for m in matches if m not in false_positives and len(m) >= 5]
+        return self._extractor.extract_model_numbers(text)
 
 
 if __name__ == "__main__":

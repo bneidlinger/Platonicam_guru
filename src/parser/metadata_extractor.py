@@ -27,13 +27,24 @@ class MetadataExtractor:
 
     # Regex patterns for surveillance equipment data
     PATTERNS = {
-        # Model numbers: XNV-8080R, XNP-6400RW, P3265-LVE, NBE-3502, VB-H47, etc.
-        # MUST contain at least one digit (lookahead ensures this)
-        # Prevents matching plain hyphenated words like "E-MAIL", "ONE-SHOT"
-        "model_num": r"\b((?=[A-Z0-9-]*[0-9])[A-Z]{1,4}[-]?[A-Z0-9]{2,10}(?:[-][A-Z0-9]+)?)\b",
+        # Model numbers: XNV-8080R, XNP-6400RW, P3265-LVE, NBE-3502, VB-H47, M3905-R, FA51, etc.
+        # Alt 1: 1-3 letters + 2-5 digits + optional hyphen suffix (P1385, M3905-R, FA51)
+        # Alt 2: 2-3 letters + hyphen + optional letter + 2-4 digits + 0-2 letter
+        #        suffix + optional hyphen suffix (XNV-8080R, XNP-6400RW, VB-H47, NBE-3502-AL)
+        "model_num": r"\b([A-Z]{1,3}\d{2,5}(?:-[A-Z0-9]{1,4})?|[A-Z]{2,3}-[A-Z]?\d{2,4}[A-Z]{0,2}(?:-[A-Z0-9]+)?)\b",
 
-        # PoE wattage: 12.9W, 25.5 W, 8W (excludes WDR false positives)
-        "poe_wattage": r"(\d{1,2}\.?\d?)\s?W(?:atts?)?(?!\s*D)",
+        # Standalone wattage: "12.95 W", "8W", "15 Watts". Full decimal capture
+        # (\d{1,3}(?:\.\d{1,2})?) prevents "12.95 W" matching as "95 W"; the \b
+        # after the W unit rejects WDR/wire/white without banning "W power"/"W PoE".
+        "poe_wattage": r"\b(\d{1,3}(?:\.\d{1,2})?)\s?W(?:atts?)?\b(?!-)",
+
+        # Max-labeled wattage, label first: "max 12.95 W", "Maximum: 25.5W",
+        # "Max Power Consumption: 25.5W". [^\d\n] skips label words but cannot
+        # cross other numbers or lines.
+        "poe_wattage_max_pre": r"\bmax(?:imum)?[^\d\n]{0,30}?(\d{1,3}(?:\.\d{1,2})?)\s?W(?:atts?)?\b(?!-)",
+
+        # Max-labeled wattage, label after: "15 Watts maximum", "25.5 W max"
+        "poe_wattage_max_post": r"\b(\d{1,3}(?:\.\d{1,2})?)\s?W(?:atts?)?\b[^\d\n,;]{0,3}?\bmax(?:imum)?\b",
 
         # PoE class: Class 3, Class 4, PoE Class 2
         "poe_class": r"(?:PoE\s*)?Class\s*([0-8])",
@@ -69,9 +80,21 @@ class MetadataExtractor:
 
     # Common false positives that match model number pattern but aren't cameras
     MODEL_BLOCKLIST_PREFIXES = (
-        "IEEE", "HTTP", "HTTPS", "RFC", "IPV", "IP6", "RJ4", "IK1", "AES",
-        "USB", "HDMI", "H26", "H27", "MPEG", "MJPEG", "CNS", "GB2", "UL9",
+        "IEEE", "HTTP", "HTTPS", "RFC", "IPV", "IP6", "IP5", "IP4", "IP3", "IP2", "IP1",
+        "RJ4", "RJ1", "RJ-", "RS2", "RS4", "RS-", "IK0", "IK1", "AES", "EAL", "HSTS",
+        "TYPE", "PEAP", "ICES", "USB", "HDMI", "H26", "H27", "MPEG", "MJPEG", "CNS",
+        "GB2", "UL", "EN5", "ISO", "IEC", "STD", "MIL",
+        "ARTPEC", "STREAM", "RECOVER", "VISUAL", "X128", "MT76", "XLR", "TR2",
+        "WPA", "WPS", "SUS", "NMB", "TM3", "A550", "C075", "M25X",
+        "MOUNT", "PROTECT", "TU60", "SP50", "T84", "T91", "T94", "EXTB",
     )
+
+    # Exact matches to block (not just prefixes)
+    MODEL_BLOCKLIST_EXACT = {
+        "IP42", "IP51", "IP52", "IP54", "IP66", "IP67", "IP68",
+        "IK08", "IK10", "RS485", "RJ12", "RJ45", "RS232", "RS422",
+        "R118",  # UN ECE R118 fire-safety standard cited in transport datasheets
+    }
 
     def extract_model_numbers(self, text: str) -> list[str]:
         """
@@ -85,10 +108,12 @@ class MetadataExtractor:
         result = []
         for m in matches:
             upper = m.upper()
-            # Filter out short matches and known false positives
+            # Filter out short matches, known false positives, and blocklisted patterns
             if (upper not in seen and
                 len(upper) >= 4 and
-                not upper.startswith(self.MODEL_BLOCKLIST_PREFIXES)):
+                upper not in self.MODEL_BLOCKLIST_EXACT and
+                not upper.startswith(self.MODEL_BLOCKLIST_PREFIXES) and
+                not upper.endswith("-RATED")):  # Block IK08-RATED, IP52-RATED, etc.
                 seen.add(upper)
                 result.append(upper)
         return result
@@ -101,18 +126,30 @@ class MetadataExtractor:
         """
         Extract PoE power consumption value.
 
-        Returns the highest realistic wattage found, or None.
+        Prefers values explicitly labeled "max"/"maximum" (the budget-relevant
+        figure); falls back to the highest standalone wattage in range.
+        Returns None when nothing realistic is found.
         """
-        matches = self._compiled_patterns["poe_wattage"].findall(text)
-        if matches:
-            try:
-                # Filter to realistic range and return max
-                valid = [float(m) for m in matches
-                        if self.MIN_POE_WATTAGE <= float(m) <= self.MAX_POE_WATTAGE]
-                return max(valid) if valid else None
-            except ValueError:
-                return None
-        return None
+        def _valid(raw: list[str]) -> list[float]:
+            vals = []
+            for r in raw:
+                try:
+                    v = float(r)
+                except ValueError:
+                    continue
+                if self.MIN_POE_WATTAGE <= v <= self.MAX_POE_WATTAGE:
+                    vals.append(v)
+            return vals
+
+        labeled = _valid(
+            self._compiled_patterns["poe_wattage_max_pre"].findall(text)
+            + self._compiled_patterns["poe_wattage_max_post"].findall(text)
+        )
+        if labeled:
+            return max(labeled)
+
+        candidates = _valid(self._compiled_patterns["poe_wattage"].findall(text))
+        return max(candidates) if candidates else None
 
     def extract_poe_class(self, text: str) -> Optional[str]:
         """

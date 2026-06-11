@@ -320,6 +320,20 @@ class ChromaStore:
 
         return result
 
+    def list_model_numbers(self) -> set[str]:
+        """
+        Distinct model_num values across the collection.
+
+        Used to resolve partial model references ("M1075" -> "M1075-L")
+        to values that exist as filterable metadata.
+        """
+        data = self.collection.get(include=["metadatas"])
+        return {
+            meta["model_num"]
+            for meta in data.get("metadatas") or []
+            if meta.get("model_num")
+        }
+
     def count(self) -> int:
         """Get total document count."""
         return self.collection.count()

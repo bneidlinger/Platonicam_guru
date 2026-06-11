@@ -20,9 +20,11 @@ from src.rag.prompts import (
     POE_QUERY_TEMPLATE,
     ACCESSORY_QUERY_TEMPLATE,
     COMPARISON_TEMPLATE,
+    SPECIFICATION_TEMPLATE,
     FOLLOWUP_TEMPLATE,
     classify_query,
     format_context,
+    format_metadata_summary,
 )
 
 
@@ -81,6 +83,8 @@ class RAGChain:
             return self._handle_accessory_query(question, vendor, stream)
         elif query_type == "comparison":
             return self._handle_comparison_query(question, vendor, stream)
+        elif query_type == "specification":
+            return self._handle_specification_query(question, vendor, stream)
         else:
             return self._handle_general_query(question, vendor, use_memory, stream)
 
@@ -92,11 +96,23 @@ class RAGChain:
         stream: bool,
     ):
         """Handle general queries with standard RAG."""
-        # Check for follow-up
-        is_followup = use_memory and self.memory.is_followup(question)
+        # Extract model numbers for better retrieval
+        models = self.retriever._extract_model_numbers(question)
 
-        # Retrieve context
-        context_data = self.retriever.retrieve_with_context(question, vendor=vendor)
+        # A query that names a model is self-contained; only model-free
+        # queries with reference words get follow-up treatment.
+        is_followup = use_memory and not models and self.memory.is_followup(question)
+
+        # Retrieve context - use model filter if models detected
+        if models:
+            results = self.retriever.retrieve_for_models(models, question)
+            context_data = {
+                "results": results,
+                "context": format_context(results),
+                "metadata_summary": format_metadata_summary(results),
+            }
+        else:
+            context_data = self.retriever.retrieve_with_context(question, vendor=vendor)
 
         # Build prompt
         if is_followup and self.memory.messages:
@@ -208,6 +224,44 @@ class RAGChain:
             self._update_memory(question, response, context_data)
             return response
 
+    def _handle_specification_query(
+        self,
+        question: str,
+        vendor: Optional[str],
+        stream: bool,
+    ):
+        """Handle specification queries about specific models."""
+        # Extract model numbers from question
+        models = self.retriever._extract_model_numbers(question)
+
+        if models:
+            # Retrieve with model filter for better accuracy
+            results = self.retriever.retrieve_for_models(models, question)
+            model_str = ", ".join(models)
+        else:
+            # Fallback to general retrieval
+            results = self.retriever.retrieve(question, vendor=vendor)
+            model_str = "Unknown"
+
+        context_data = {
+            "results": results,
+            "context": format_context(results),
+            "metadata_summary": format_metadata_summary(results),
+        }
+
+        prompt = SPECIFICATION_TEMPLATE.format(
+            context=context_data["context"],
+            model=model_str,
+            question=question,
+        )
+
+        if stream:
+            return self._stream_response(prompt, question, context_data)
+        else:
+            response = self.llm.generate(prompt, system=SYSTEM_PROMPT)
+            self._update_memory(question, response, context_data)
+            return response
+
     def _stream_response(
         self,
         prompt: str,
@@ -269,9 +323,10 @@ class RAGChain:
         Direct POE budget calculation from metadata.
 
         Design Principle: Use metadata for computation, not LLM.
+        Partial model references resolve to stored tags first.
         """
         return self.retriever.store.calculate_poe_budget(
-            [m.upper() for m in models]
+            self.retriever.resolve_model_references(models)
         )
 
 

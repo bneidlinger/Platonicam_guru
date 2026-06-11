@@ -3,6 +3,7 @@ Conversation Memory for follow-up questions.
 
 Maintains conversation history and context for multi-turn interactions.
 """
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
@@ -201,6 +202,15 @@ class ConversationMemory:
             "assistant_messages": sum(1 for m in self.messages if m.role == "assistant"),
         }
 
+    # Word-bounded pronouns/references that suggest a follow-up. Substring
+    # matching is wrong here: "it" would match "with", "that" would match
+    # "thats" etc., turning nearly every turn-2+ query into a "follow-up".
+    _FOLLOWUP_PATTERN = re.compile(
+        r"\b(?:it|its|they|them|this|that|these|those|also|too|another|other|more|else|same)\b"
+        r"|\bwhat about\b|\bhow about\b|\bas well\b|\band the\b",
+        re.IGNORECASE,
+    )
+
     def is_followup(self, query: str) -> bool:
         """
         Detect if a query is likely a follow-up question.
@@ -214,15 +224,7 @@ class ConversationMemory:
         if not self.messages:
             return False
 
-        # Check for pronouns/references that suggest follow-up
-        followup_indicators = [
-            "it", "its", "they", "them", "this", "that", "these", "those",
-            "the same", "also", "too", "as well", "what about", "how about",
-            "and the", "another", "other", "more", "else",
-        ]
-
-        query_lower = query.lower()
-        return any(indicator in query_lower for indicator in followup_indicators)
+        return bool(self._FOLLOWUP_PATTERN.search(query))
 
 
 class SessionManager:

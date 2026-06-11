@@ -17,7 +17,15 @@ from config.settings import Settings
 class OllamaEmbedder:
     """
     Generates embeddings using Ollama's local embedding models.
+
+    nomic-embed-text is trained with task prefixes: queries and documents must
+    be embedded with "search_query: " / "search_document: " respectively or
+    retrieval quality degrades. Prefixes are applied automatically for nomic
+    models and affect only the embedding input, never stored content.
     """
+
+    QUERY_PREFIX = "search_query: "
+    DOC_PREFIX = "search_document: "
 
     def __init__(
         self,
@@ -35,9 +43,15 @@ class OllamaEmbedder:
             self._client = ollama.Client(host=self.host)
         return self._client
 
+    def _needs_prefix(self) -> bool:
+        return "nomic" in self.model.lower()
+
     def embed_text(self, text: str) -> list[float]:
         """
-        Generate embedding for a single text.
+        Generate embedding for a single raw text (no task prefix).
+
+        Prefer embed_query() / embed_documents() so the correct task prefix
+        is applied.
 
         Args:
             text: Text to embed.
@@ -51,9 +65,19 @@ class OllamaEmbedder:
         )
         return response["embedding"]
 
+    def embed_query(self, text: str) -> list[float]:
+        """Embed a search query with the model's query task prefix."""
+        prefix = self.QUERY_PREFIX if self._needs_prefix() else ""
+        return self.embed_text(prefix + text)
+
+    def embed_documents(self, texts: list[str], show_progress: bool = True) -> list[list[float]]:
+        """Embed documents for storage with the model's document task prefix."""
+        prefix = self.DOC_PREFIX if self._needs_prefix() else ""
+        return self._embed_many([prefix + t for t in texts], show_progress)
+
     def embed_batch(self, texts: list[str], show_progress: bool = True) -> list[list[float]]:
         """
-        Generate embeddings for multiple texts.
+        Generate embeddings for multiple raw texts (no task prefix).
 
         Args:
             texts: List of texts to embed.
@@ -62,24 +86,36 @@ class OllamaEmbedder:
         Returns:
             List of embedding vectors.
         """
-        embeddings = []
+        return self._embed_many(texts, show_progress)
+
+    def _embed_many(self, texts: list[str], show_progress: bool = True) -> list[list[float]]:
+        """Batch-embed via /api/embed when available, else one at a time."""
         total = len(texts)
+        embeddings: list[list[float]] = []
 
-        for i, text in enumerate(texts):
-            embedding = self.embed_text(text)
-            embeddings.append(embedding)
-
-            if show_progress and (i + 1) % 10 == 0:
-                print(f"  Embedded {i + 1}/{total} chunks")
-
-        if show_progress:
-            print(f"  Embedded {total}/{total} chunks (complete)")
+        if hasattr(self.client, "embed"):
+            step = max(1, Settings.EMBED_BATCH_SIZE)
+            for i in range(0, total, step):
+                response = self.client.embed(model=self.model, input=texts[i:i + step])
+                batch = getattr(response, "embeddings", None)
+                if batch is None:
+                    batch = response["embeddings"]
+                embeddings.extend(list(batch))
+                if show_progress:
+                    print(f"  Embedded {min(i + step, total)}/{total} chunks")
+        else:
+            for i, text in enumerate(texts):
+                embeddings.append(self.embed_text(text))
+                if show_progress and (i + 1) % 10 == 0:
+                    print(f"  Embedded {i + 1}/{total} chunks")
+            if show_progress:
+                print(f"  Embedded {total}/{total} chunks (complete)")
 
         return embeddings
 
     def embed_chunks(self, chunks: list[dict], show_progress: bool = True) -> list[dict]:
         """
-        Add embeddings to chunk dicts.
+        Add embeddings to chunk dicts (uses the document task prefix).
 
         Args:
             chunks: List of chunk dicts with 'content' key.
@@ -89,7 +125,7 @@ class OllamaEmbedder:
             Same chunks with 'embedding' key added.
         """
         texts = [chunk["content"] for chunk in chunks]
-        embeddings = self.embed_batch(texts, show_progress=show_progress)
+        embeddings = self.embed_documents(texts, show_progress=show_progress)
 
         for chunk, embedding in zip(chunks, embeddings):
             chunk["embedding"] = embedding

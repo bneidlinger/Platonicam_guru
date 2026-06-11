@@ -87,19 +87,50 @@ class IngestionPipeline:
         for chunk in chunks:
             file_stats["images"] += len(chunk.get("metadata", {}).get("image_refs", []))
 
-        # Step 2: Enrich with extracted metadata
+        # Step 2: Extract model from filename for propagation
+        filename_model = self._extract_model_from_filename(pdf_path.stem)
+
+        # Step 3: Enrich with extracted metadata
         for chunk in chunks:
             self.extractor.enrich_chunk(chunk)
+            meta = chunk["metadata"]
+            if filename_model:
+                # The filename names the product the datasheet is about, so it
+                # is the authoritative model_num for every chunk. First-match
+                # text extraction tags chunks with whatever model-shaped token
+                # appears first (accessories, compliance codes); demote those
+                # to related_models so they stay searchable.
+                extracted_model = meta.get("model_num")
+                if extracted_model and extracted_model != filename_model:
+                    related = meta.get("related_models") or []
+                    if isinstance(related, str):
+                        related = [r for r in related.split(",") if r]
+                    if extracted_model not in related:
+                        related.insert(0, extracted_model)
+                    meta["related_models"] = related
+                meta["model_num"] = filename_model
 
-        # Step 3: Generate embeddings
+        # Step 4: Generate embeddings
         chunks = self.embedder.embed_chunks(chunks, show_progress=False)
 
-        # Step 4: Store in ChromaDB
+        # Step 5: Store in ChromaDB
         result = self.store.add_chunks(chunks, skip_existing=skip_existing, show_progress=False)
         file_stats["added"] = result["added"]
         file_stats["skipped"] = result["skipped"]
 
         return file_stats
+
+    def _extract_model_from_filename(self, filename: str) -> Optional[str]:
+        """
+        Extract model number from PDF filename.
+
+        Examples:
+            'M3905-R Dome Camera' -> 'M3905-R'
+            'P3265-LVE Dome' -> 'P3265-LVE'
+            'XNV-8080R Datasheet' -> 'XNV-8080R'
+        """
+        models = self.extractor.extract_model_numbers(filename)
+        return models[0] if models else None
 
     def ingest_directory(
         self,
